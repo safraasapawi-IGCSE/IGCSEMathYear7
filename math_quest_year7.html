@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Math Quest: Year 7 Platform Adventure</title>
+<style>
+  :root { --ink:#172554; --sky:#b9e7ff; --panel:#ffffffee; --gold:#ffd54a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Arial,sans-serif; background:linear-gradient(#dff5ff,#f8fcff); color:var(--ink); }
+  header { text-align:center; padding:14px 12px 8px; }
+  h1 { margin:0; font-size:clamp(1.35rem,4vw,2.2rem); }
+  header p { margin:5px 0; }
+  .wrap { max-width:1000px; margin:auto; padding:0 12px 18px; }
+  .hud { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:8px 0; }
+  .pill { background:white; border:2px solid #b9d8ef; border-radius:999px; padding:7px 13px; font-weight:700; box-shadow:0 2px 0 #9bc3df; }
+  .gamebox { position:relative; border:4px solid #244b75; border-radius:16px; overflow:hidden; background:#8bd8ff; box-shadow:0 8px 0 #b6d9ec; }
+  canvas { display:block; width:100%; height:auto; image-rendering:pixelated; }
+  .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#10264c99; padding:14px; }
+  .modal { max-width:520px; width:100%; background:var(--panel); border:3px solid #fff; border-radius:18px; padding:20px; text-align:center; box-shadow:0 10px 25px #17324c55; }
+  .modal h2 { margin:0 0 8px; }
+  .modal p { line-height:1.45; }
+  button { border:0; border-radius:12px; background:#ffbf2f; color:#3a2600; font-size:1rem; font-weight:800; padding:11px 17px; cursor:pointer; box-shadow:0 4px 0 #c78013; }
+  button:hover { filter:brightness(1.04); transform:translateY(-1px); }
+  button:focus-visible { outline:3px solid #235bd4; outline-offset:3px; }
+  .controls { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:14px 0; }
+  .help { background:#fff; border:2px solid #d2e8f5; border-radius:14px; padding:12px 16px; margin-top:12px; }
+  .help strong { color:#075985; }
+  .small { font-size:.92rem; }
+  .mathbox { position:absolute; top:12px; left:50%; transform:translateX(-50%); width:min(88%,520px); background:#fffdf2; border:3px solid #e9a928; border-radius:14px; padding:10px 12px; text-align:center; display:none; box-shadow:0 4px 0 #b87a18; }
+  .mathbox .q { font-size:clamp(1.1rem,3vw,1.5rem); font-weight:900; }
+  .answers { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
+  .answers button { padding:8px 14px; min-width:72px; background:#8be0a2; box-shadow:0 3px 0 #379957; }
+  .feedback { font-weight:800; min-height:1.3em; margin-top:6px; }
+  @media(max-width:600px) { .pill {font-size:.9rem;} .help {font-size:.9rem;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍄 Math Quest: Year 7 Platform Adventure</h1>
+  <p>Jump, collect stars, and solve IGCSE-style maths challenges!</p>
+</header>
+<div class="wrap">
+  <div class="hud">
+    <div class="pill">⭐ Stars: <span id="score">0</span></div>
+    <div class="pill">❤️ Lives: <span id="lives">3</span></div>
+    <div class="pill">📍 Level: <span id="level">1</span></div>
+    <div class="pill">🧠 Correct answers: <span id="correct">0</span></div>
+  </div>
+  <div class="gamebox">
+    <canvas id="game" width="960" height="480" aria-label="Math Quest platform game"></canvas>
+    <div class="mathbox" id="mathbox">
+      <div class="q" id="question">Solve the question!</div>
+      <div class="answers" id="answers"></div>
+      <div class="feedback" id="feedback" aria-live="polite"></div>
+    </div>
+    <div class="overlay" id="overlay">
+      <div class="modal" id="modal">
+        <h2>Ready, Maths Explorer?</h2>
+        <p>Help Pip the explorer cross the colourful world. Collect ⭐ stars and hit golden question blocks to answer Year 7 maths questions.</p>
+        <p><b>Keyboard:</b> ← → or A/D to move · ↑ or W or SPACE to jump</p>
+        <p class="small">Topics: integers, factors and multiples, fractions, decimals, percentages, ratio, algebra, and angles.</p>
+        <button id="start">Start Adventure ▶</button>
+      </div>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="leftBtn" aria-label="Move left">◀ Left</button>
+    <button id="jumpBtn">⬆ Jump</button>
+    <button id="rightBtn">Right ▶</button>
+    <button id="restartBtn">↻ Restart</button>
+  </div>
+  <div class="help">
+    <strong>How to play:</strong> Move with the keyboard, jump onto platforms, collect stars, and touch a golden <b>?</b> block to answer a question. Each correct answer earns 10 stars. Reach the flag to finish the level!
+    <div class="small">Teacher note: This is an original classroom game inspired by classic side-scrolling platform adventures; it does not use official Super Mario characters or assets.</div>
+  </div>
+</div>
+<script>
+(() => {
+ const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
+ const scoreEl=document.getElementById('score'), livesEl=document.getElementById('lives'), levelEl=document.getElementById('level'), correctEl=document.getElementById('correct');
+ const overlay=document.getElementById('overlay'), modal=document.getElementById('modal'), mathbox=document.getElementById('mathbox'), questionEl=document.getElementById('question'), answersEl=document.getElementById('answers'), feedbackEl=document.getElementById('feedback');
+ const W=canvas.width,H=canvas.height, worldW=2100;
+ let keys={}, score=0,lives=3,correct=0,level=1,running=false,won=false,cam=0,activeQuestion=null,questionBlock=null,questionUsed=new Set();
+ const player={x:55,y:350,w:30,h:38,vx:0,vy:0,onGround:false,invuln:0};
+ let platforms=[],stars=[],blocks=[],flag={x:2010,y:280};
+ const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1));
+ function makeLevel(){
+   platforms=[{x:0,y:420,w:worldW,h:60},{x:170,y:350,w:115,h:18},{x:355,y:300,w:120,h:18},{x:555,y:360,w:130,h:18},{x:770,y:315,w:125,h:18},{x:975,y:355,w:140,h:18},{x:1190,y:290,w:130,h:18},{x:1405,y:340,w:140,h:18},{x:1630,y:285,w:130,h:18},{x:1815,y:350,w:125,h:18}];
+   stars=[{x:210,y:315,taken:false},{x:410,y:265,taken:false},{x:610,y:325,taken:false},{x:825,y:280,taken:false},{x:1035,y:320,taken:false},{x:1240,y:255,taken:false},{x:1460,y:305,taken:false},{x:1680,y:250,taken:false},{x:1860,y:315,taken:false}];
+   blocks=[{x:310,y:340,used:false},{x:700,y:305,used:false},{x:930,y:345,used:false},{x:1350,y:280,used:false},{x:1770,y:340,used:false}];
+   player.x=55;player.y=365;player.vx=player.vy=0;player.invuln=0;cam=0;won=false;questionUsed.clear();
+ }
+ const questions=[
+  ()=>{let a=rnd(12,35),b=rnd(3,11);return {q:`Calculate: ${a} − ${b}`,a:String(a-b),opts:[a-b,a+b,b-a,a-b+2].sort(()=>Math.random()-.5)}},
+  ()=>{let a=[12,18,20,24,30][rnd(0,4)],b=[3,4,5,6][rnd(0,3)];let ans=a%b===0?`${a/b}`:`${a/b}`;return {q:`What is ${a} ÷ ${b}?`,a:ans,opts:[a/b,a/b+1,Math.max(1,a/b-2),a/b+3]}},
+  ()=>{let a=[2,3,4,5][rnd(0,3)],den=[4,5,6,8,10][rnd(0,4)],num=rnd(1,den-1);return {q:`Simplify ${num*a}/${den*a}`,a:`${num}/${den}`,opts:[`${num}/${den}`,`${num+1}/${den}`,`${num}/${den+1}`,`${den}/${num}`]}},
+  ()=>{let n=[20,40,60,80,120,150][rnd(0,5)],p=[10,20,25,50][rnd(0,3)];return {q:`Find ${p}% of ${n}.`,a:String(n*p/100),opts:[n*p/100,n*p/100+5,Math.max(1,n*p/100-5),n*p/10]}},
+  ()=>{let a=rnd(2,9),b=rnd(2,9);return {q:`If x = ${a}, find 3x + ${b}.`,a:String(3*a+b),opts:[3*a+b,3*a-b,a+b,2*a+b]}},
+  ()=>{let a=[3,4,5,6,8,9][rnd(0,5)],b=[2,3,4,5,6][rnd(0,4)];return {q:`What is the HCF of ${a*2} and ${b*2}?`,a:String(gcd(a*2,b*2)),opts:[gcd(a*2,b*2),a*2+b*2,Math.max(a*2,b*2),1]}},
+  ()=>{let angle=[35,42,58,67,110,125][rnd(0,5)];return {q:`Angles on a straight line add to 180°. Find x: x + ${angle}° = 180°.`,a:`${180-angle}°`,opts:[`${180-angle}°`,`${angle}°`,` ${180+angle}°`,`${90-angle}°`]}},
+  ()=>{let a=rnd(2,8),b=rnd(2,8);return {q:`Simplify the ratio ${a*2}:${b*2}.`,a:`${a}:${b}`,opts:[`${a}:${b}`,`${a*2}:${b}`,`${a}:${b*2}`,`${b}:${a}`]}}
+ ];
+ function gcd(a,b){return b?gcd(b,a%b):a;}
+ function norm(v){return String(v).replace(/\s/g,'');}
+ function start(){overlay.style.display='none';running=true;requestAnimationFrame(loop);}
+ function openQuestion(bl){
+   if(activeQuestion||bl.used)return;activeQuestion=true;questionBlock=bl;
+   let q=questions[rnd(0,questions.length-1)]();q.opts=[...new Set(q.opts.map(String))];while(q.opts.length<3)q.opts.push(String(Number(q.a)+rnd(2,9)));
+   if(!q.opts.some(v=>norm(v)===norm(q.a)))q.opts[0]=q.a;
+   q.opts=q.opts.sort(()=>Math.random()-.5);questionBlock=bl;
+   questionEl.textContent=q.q;answersEl.innerHTML='';feedbackEl.textContent='';
+   q.opts.forEach(opt=>{let b=document.createElement('button');b.textContent=opt;b.onclick=()=>answer(opt,q);answersEl.appendChild(b);});
+   mathbox.style.display='block';
+ }
+ function answer(opt,q){
+   if(norm(opt)===norm(q.a)){score+=10;correct++;scoreEl.textContent=score;correctEl.textContent=correct;feedbackEl.textContent='Correct! +10 stars 🌟';feedbackEl.style.color='#16783a';questionBlock.used=true;setTimeout(closeQuestion,700);}
+   else{feedbackEl.textContent='Not quite! Try another answer.';feedbackEl.style.color='#b42318';}
+ }
+ function closeQuestion(){mathbox.style.display='none';activeQuestion=false;questionBlock=null;}
+ function drawBackground(){
+   ctx.fillStyle='#8bd8ff';ctx.fillRect(0,0,W,H);
+   // distant hills
+   for(let i=0;i<8;i++){let x=i*310-(cam*.25%310);ctx.fillStyle=i%2?'#76d99c':'#5cc889';ctx.beginPath();ctx.ellipse(x+100,405,150,95,0,0,Math.PI*2);ctx.fill();}
+   for(let i=0;i<7;i++){let x=i*250-(cam*.12%250);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x+50,80,22,0,Math.PI*2);ctx.arc(x+75,70,28,0,Math.PI*2);ctx.arc(x+105,82,20,0,Math.PI*2);ctx.fill();}
+ }
+ function draw(){
+   drawBackground();
+   ctx.save();ctx.translate(-cam,0);
+   platforms.forEach(p=>{ctx.fillStyle='#9b633b';ctx.fillRect(p.x,p.y,p.w,p.h);ctx.fillStyle='#43b95e';ctx.fillRect(p.x,p.y,p.w,7);ctx.fillStyle='#74472c';for(let x=p.x+8;x<p.x+p.w;x+=28)ctx.fillRect(x,p.y+15,14,4);});
+   blocks.forEach(b=>{ctx.fillStyle=b.used?'#d6a74a':'#ffc928';ctx.fillRect(b.x,b.y,34,34);ctx.strokeStyle='#a56513';ctx.lineWidth=3;ctx.strokeRect(b.x,b.y,34,34);ctx.fillStyle='#fff';ctx.font='bold 26px system-ui';ctx.fillText(b.used?'✓':'?',b.x+9,b.y+26);});
+   stars.forEach(s=>{if(!s.taken){ctx.fillStyle='#ffdf3e';ctx.beginPath();for(let i=0;i<10;i++){let r=i%2?7:14,a=-Math.PI/2+i*Math.PI/5;ctx.lineTo(s.x+Math.cos(a)*r,s.y+Math.sin(a)*r);}ctx.closePath();ctx.fill();ctx.strokeStyle='#e99a00';ctx.stroke();}});
+   // flag
+   ctx.fillStyle='#fff';ctx.fillRect(flag.x,flag.y,6,140);ctx.fillStyle='#f14b5b';ctx.beginPath();ctx.moveTo(flag.x+6,flag.y);ctx.lineTo(flag.x+65,flag.y+18);ctx.lineTo(flag.x+6,flag.y+38);ctx.fill();
+   // Pip original hero
+   ctx.fillStyle='#263b83';ctx.fillRect(player.x+5,player.y+11,20,22);ctx.fillStyle='#ffd3a1';ctx.fillRect(player.x+7,player.y,17,17);ctx.fillStyle='#f15b54';ctx.fillRect(player.x+4,player.y-3,23,7);ctx.fillStyle='#fff';ctx.fillRect(player.x+18,player.y+5,4,4);ctx.fillStyle='#272727';ctx.fillRect(player.x+20,player.y+6,2,2);ctx.fillStyle='#f3b52b';ctx.fillRect(player.x+5,player.y+32,8,6);ctx.fillRect(player.x+18,player.y+32,8,6);
+   ctx.restore();
+ }
+ function update(){
+   if(!running||activeQuestion)return;
+   let left=keys.ArrowLeft||keys.a||keys.A,right=keys.ArrowRight||keys.d||keys.D,jump=keys.ArrowUp||keys.w||keys.W||keys[' '];
+   player.vx=left?-4.2:right?4.2:0;
+   if(jump&&player.onGround){player.vy=-12.5;player.onGround=false;}
+   player.vy+=.58;player.x+=player.vx;player.y+=player.vy;player.onGround=false;
+   player.x=Math.max(0,Math.min(worldW-player.w,player.x));
+   platforms.forEach(p=>{if(player.x+player.w>p.x&&player.x<p.x+p.w&&player.y+player.h>=p.y&&player.y+player.h<=p.y+18&&player.vy>=0){player.y=p.y-player.h;player.vy=0;player.onGround=true;}});
+   stars.forEach(s=>{if(!s.taken&&Math.abs((player.x+player.w/2)-s.x)<22&&Math.abs((player.y+player.h/2)-s.y)<25){s.taken=true;score+=5;scoreEl.textContent=score;}});
+   blocks.forEach(b=>{if(!b.used&&player.x+player.w>b.x&&player.x<b.x+34&&player.y+player.h>b.y&&player.y<b.y+34){openQuestion(b);}});
+   if(player.y>H+100){lives--;livesEl.textContent=lives;if(lives<=0){endGame(false);return;}player.x=Math.max(30,player.x-150);player.y=300;player.vy=0;}
+   cam=Math.max(0,Math.min(worldW-W,player.x-W*.35));
+   if(player.x>flag.x-10){endGame(true);}
+ }
+ function loop(){if(!running)return;update();draw();if(running)requestAnimationFrame(loop);}
+ function endGame(win){running=false;won=win;overlay.style.display='flex';modal.innerHTML=win?`<h2>🏆 Level Complete!</h2><p>You reached the flag!</p><p><b>Stars:</b> ${score} &nbsp; <b>Correct answers:</b> ${correct}</p><p>${correct>=4?'Brilliant maths work!':'Great effort—replay to practise more questions.'}</p><button id="again">Play Again ↻</button>`:`<h2>Game Over</h2><p>You collected ${score} stars and answered ${correct} questions correctly.</p><button id="again">Try Again ↻</button>`;document.getElementById('again').onclick=restart;}
+ function restart(){score=0;lives=3;correct=0;scoreEl.textContent=0;livesEl.textContent=3;correctEl.textContent=0;levelEl.textContent=1;makeLevel();closeQuestion();overlay.style.display='flex';modal.innerHTML=`<h2>Ready, Maths Explorer?</h2><p>Collect stars, solve questions, and reach the flag!</p><p><b>Keyboard:</b> ← → or A/D to move · ↑ or W or SPACE to jump</p><button id="start">Start Adventure ▶</button>`;document.getElementById('start').onclick=start;}
+ document.getElementById('start').onclick=start;
+ document.getElementById('restartBtn').onclick=restart;
+ document.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp',' '].includes(e.key))e.preventDefault();keys[e.key]=true;if(!running&&e.key==='Enter')start();});
+ document.addEventListener('keyup',e=>keys[e.key]=false);
+ function holdButton(id,key){let el=document.getElementById(id);el.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true;});['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>keys[key]=false));}
+ holdButton('leftBtn','ArrowLeft');holdButton('rightBtn','ArrowRight');holdButton('jumpBtn',' ');
+ makeLevel();draw();
+})();
+</script>
+</body>
+</html>
